@@ -7,23 +7,48 @@ where private repos have no branch protection.
 
 ## What's in the box
 
+### Git flow and review
+
 | Path | What it does |
 | ---- | ------------ |
-| `.github/workflows/pr-lint.yml` | `title`: PR title is a Conventional Commit ≤ 72 chars (it becomes the squash commit). `base`: Git flow base rules (features into `develop`, only `release/*`/`hotfix/*` into `main`, `release/*` never into `develop`, `main`/`develop` never a PR head). `body`: ticket reference + `## Checklist` (skipped for Dependabot). |
-| `.github/workflows/branch-guard.yml` | `pr-source`: only `release/*`/`hotfix/*` may target `main`. `direct-push`: a commit on `main`/`develop` that didn't come from a merged PR fails and opens a `direct-push` issue. |
-| `.github/workflows/review-gate.yml` + `.github/scripts/review-gate.mjs` | Turns the agent's review heading into a check. Hardened: logic and tests run from the PR's **base** commit (a PR can't rewrite its own gate), staleness by `Reviewed-SHA`, owner-only override label, auto-pass for pure back-merges, a sync job so every check row shows the latest verdict, least-privilege tokens. |
-| `tools/review-gate/*.test.mjs` | 29 tests for the gate logic, plus `workflow.test.mjs`, which locks the base-checkout shape. Run: `node --test "tools/review-gate/*.test.mjs"`. Needs Node 22 (`.nvmrc`). |
-| `.github/pull_request_template.md` | Ticket, what/why, Touches, testing, and the checklist pr-lint requires. |
-| `.github/CODEOWNERS` | Owner on everything. |
-| `.github/dependabot.yml` | Weekly grouped dependency and Actions-SHA bumps into `develop`, with Conventional prefixes. |
-| `.githooks/pre-push`, `.githooks/commit-msg` | Local guards: refuse pushes to `main`/`develop`; enforce Conventional Commits. |
-| `.gitmessage` | Commit template. |
-| `.claude/skills/review-pr/SKILL.md` | The `/review-pr <n>` command: hygiene, checks, parallel reviewer agents, one consolidated review in the format the gate reads. |
-| `.claude/agents/code-reviewer.md` | Generic code-reviewer agent with `KIT` slots for project rules. |
-| `CLAUDE.process.md` | The Workflow section to paste into `CLAUDE.md` / `AGENTS.md`. |
-| `CONTRIBUTING.md`, `docs/git-flow.md` | The full process (branches, commits, PRs, release, hotfix, back-merge) and what each check enforces. |
-| `examples/ci/*.example.yml` | The source project's stack-specific CI (pnpm + Turborepo `check`/`build`; Playwright e2e + Lighthouse budgets), kept as examples. |
-| `setup.sh` | Applies repo settings and labels with `gh` (dry run unless `--apply`). |
+| `.github/workflows/pr-lint.yml` | `title`: Conventional Commit ≤ 72 chars. `base`: Git flow base rules. `body`: ticket + `## Checklist`. `size`: warns over 600 changed lines. |
+| `.github/workflows/branch-guard.yml` | `pr-source`: only `release/*`/`hotfix/*` into `main`. `gate-tripwire`: a PR touching workflows, hooks, guards, gate or CODEOWNERS fails until the **owner** adds `gate-change: approved`. `direct-push`: a commit on `main`/`develop` without a merged PR fails and opens an issue. |
+| `.github/workflows/review-gate.yml` + `.github/scripts/review-gate.mjs` | Turns the agent review heading into a check. Script and tests run from the PR's **base** commit; staleness by `Reviewed-SHA`; owner-only override label; back-merge auto-pass. |
+| `tools/review-gate/*.test.mjs` | Gate logic tests. |
+| `.github/pull_request_template.md`, `.github/ISSUE_TEMPLATE/` | PR checklist; bug / feature / task (agent ticket with **Touches**) forms; private security link. |
+| `.github/CODEOWNERS` | Owner on everything, explicitly on process files. |
+| `.github/dependabot.yml` | Weekly grouped npm + Actions-SHA bumps into `develop`, 7-day cooldown. |
+| `.githooks/` | `commit-msg` (Conventional Commits), `pre-commit` (gitleaks + guards on staged files + optional format/lint), `pre-push` (no direct pushes to `main`/`develop` + full guards). |
+| `.claude/`, `CLAUDE.process.md`, `AGENTS.md`, `.github/copilot-instructions.md` | `/review-pr`, reviewer agent, and the workflow + **guardrails** every agent follows. |
+| `CONTRIBUTING.md`, `docs/git-flow.md`, `docs/release-checklist.md`, `CHANGELOG.md` | The process, release checklist (incl. signed tags), Keep a Changelog convention. |
+
+### Security and hygiene guards
+
+| Path | What it does |
+| ---- | ------------ |
+| `.github/workflows/guards.yml` | `secrets`: gitleaks over full history (+ optional harden-runner egress audit). `guards`: the three checks below + their tests. `kit-lint`: actionlint, zizmor, shellcheck, yamllint, markdownlint. |
+| `.gitleaks.toml` | Default gitleaks rules + Vercel tokens + high-entropy `*_SECRET=` assignments; allowlists for examples/lockfiles. |
+| `tools/guards/guards.mjs` + `.github/guards/config.json` | **files**: source only (no `.env*` except `.env.example`, PDFs, archives, executables, Office docs, DBs, key files, `node_modules`/build dirs, unknown binaries; max 1 MiB per file, 300 KB per image). **urls**: no hardcoded URLs/hosts outside an allowlist, no IPs/`localhost`/internal hostnames outside tests. **pii**: no key material anywhere, no real emails/phones outside tests. Zero dependencies. See [docs/guards.md](docs/guards.md). |
+| `SECURITY.md` | Private reporting policy and leaked-secret runbook. |
+| `.gitignore`, `.gitattributes`, `.env.example`, `.editorconfig` | Strong ignore template (secrets, deps, build output, downloads), LF normalization, env-var template. |
+
+### Lint, format, verify
+
+| Path | What it does |
+| ---- | ------------ |
+| `.github/workflows/lint.yml` | Stack-agnostic lint + format check: fill `__INSTALL_CMD__`, `__LINT_CMD__`, `__FORMAT_CHECK_CMD__`. |
+| `.prettierrc.json`, `.prettierignore`, `.markdownlint-cli2.jsonc`, `.yamllint.yml`, `commitlint.config.mjs` | Baseline configs (commitlint mirrors the commit-msg hook). |
+| `examples/lint/` | ESLint flat config + Prettier (JS/TS), ruff (Python), staged-file format/lint hook. |
+| `scripts/verify.sh` / `make verify` | Runs every local check CI runs; reports missing optional tools as SKIP. |
+| `.github/workflows/stale.yml` | Weekly stale PR/issue nudge and close. |
+
+### Examples (copy into `.github/workflows/` when they apply)
+
+| Path | Notes |
+| ---- | ----- |
+| `examples/ci/*.example.yml` | pnpm + Turborepo `check`/`build`; Playwright e2e + Lighthouse (only on PRs into `main`, `run-e2e` label, or pushes to `main`). |
+| `examples/security/codeql.example.yml`, `dependency-review.example.yml` | Free on public repos; private repos need GitHub Code Security (paid). |
+| `examples/release/release-please.example.yml`, `sbom.example.yml` | Optional Conventional-Commit releases; SPDX SBOM attached to each release. |
 
 All Actions are pinned to full commit SHAs with a `# vX.Y.Z` comment; Dependabot keeps them current.
 
@@ -36,6 +61,8 @@ Search for `__` and `KIT:`. Fill these in:
 | `__PROJECT_NAME__` | `My App` |
 | `__OWNER__` | your GitHub login (CODEOWNERS) |
 | `__CHECK_CMD__` / `__INSTALL_CMD__` | `pnpm check` / `pnpm install` |
+| `__LINT_CMD__` / `__FORMAT_CHECK_CMD__` | `pnpm lint` / `pnpm format:check` (or `ruff check .` / `ruff format --check .`) |
+| `__SECURITY_EMAIL__`, `__REPO__` | security contact (SECURITY.md), repo name (issue template link) |
 | `__TICKET_EXAMPLE__` / `__TICKET_REGEX__` | `S1-03` / `S[0-9]+-[0-9]{2}` (or `[A-Z]+-[0-9]+`, `#[0-9]+`) |
 | `__WEB_PACKAGE__` | workspace package name in the CI examples |
 | Scopes | edit together in `pr-lint.yml`, `.githooks/commit-msg`, `.gitmessage`, `CONTRIBUTING.md` (default: `app api db auth deps ci docs tools repo`) |
@@ -48,8 +75,13 @@ Search for `__` and `KIT:`. Fill these in:
    - creates `develop` from `main` if missing and makes it the **default branch** (`main` is the release branch);
    - allows squash (features) and merge commits (release/hotfix/back-merge), disables rebase merges;
    - turns on **`delete_branch_on_merge`**;
-   - creates labels `review-gate: override`, `direct-push`, `dependencies`, `github-actions`;
+   - creates labels `review-gate: override`, `gate-change: approved`, `direct-push`, `run-e2e`, `dependencies`,
+     `github-actions`, `stale`, `pinned`, `security`, `bug`, `enhancement`, `task`;
+   - turns on secret scanning + **push protection** (public repos; paid on private), private vulnerability
+     reporting, Dependabot alerts and security updates; sets the default workflow token to read-only;
    - sets `core.hooksPath .githooks` and the commit template for this clone (each clone/worktree needs this once).
+   Install `gitleaks` locally (`brew install gitleaks`) so the pre-commit hook scans staged changes; the others
+   (`actionlint`, `shellcheck`, `zizmor`, `yamllint`) are optional for `scripts/verify.sh`.
 3. Commit the kit on a `chore/` branch and open the first PR into `develop`. The gate goes green once a review
    with the right heading exists.
 4. Paste `CLAUDE.process.md` into `CLAUDE.md`/`AGENTS.md`, and add project rules in the `KIT` slots of the reviewer agent.
@@ -60,10 +92,12 @@ Search for `__` and `KIT:`. Fill these in:
 1. The coding agent branches from `origin/develop` (`feat/…`, `fix/…`, `chore/…`), commits Conventionally, opens a PR into `develop`.
 2. The reviewer (agent or orchestrator) runs `/review-pr <n>` and posts **one COMMENT review** (the owner can't
    approve their own PR) whose first two lines are exactly:
-   ```
+
+   ```text
    ## Review: APPROVE | REQUEST CHANGES | COMMENT
    Reviewed-SHA: <full head sha>
    ```
+
    `## Re-review: …`, `## Re-review 2: …`, `## Code review: …` also count; headings starting with `Design` count as a
    separate design verdict. Only reviews posted from the **owner's account** count.
 3. On REQUEST CHANGES, findings are written as actionable `file:line — problem → fix` items so the coding agent can
@@ -84,6 +118,11 @@ Search for `__` and `KIT:`. Fill these in:
 - **Hotfix:** `hotfix/x.y.z` from `origin/main` → fix + test → PR into `main` (merge commit) → tag → back-merge. If a
   release branch is open, merge the hotfix into it instead.
 
+## Actions minutes budget
+
+Free private repos get 2,000 minutes/month. The kit cancels superseded runs, sets timeouts, skips docs-only changes,
+and runs e2e/Lighthouse only where they matter. See [docs/minutes-budget.md](docs/minutes-budget.md) for more levers.
+
 ## Free plan vs paid
 
 | | Free plan, private repo | GitHub Pro/Team (private) or any public repo |
@@ -93,12 +132,17 @@ Search for `__` and `KIT:`. Fill these in:
 | Approvals | GitHub won't let a solo owner approve their own PR, so the verdict lives in the COMMENT review body and `review-gate` | Keep required approvals at **0** for a solo owner; `review-gate` remains the review requirement |
 | CODEOWNERS | Informational | Can be required (only useful with a second reviewer account) |
 | Actions minutes | 2,000 min/month on private repos | 3,000 (Pro) or more; unlimited on public repos |
+| Secret scanning + push protection | Not on private repos (gitleaks covers it) | Free on public repos; paid add-on on private |
+| CodeQL, dependency review | Not on private repos | Free on public repos (see `examples/security/`) |
+| gitleaks-action | Free for personal accounts | Organizations need a free `GITLEAKS_LICENSE` key |
 
 ## Known gaps and open items
 
 - **Workflow file trust (follow-up to audit item CI-01).** The gate's *script and tests* come from the base commit,
   but GitHub always reads `review-gate.yml` itself from the PR, so a PR that edits the workflow could weaken the gate.
-  Treat any diff to `.github/workflows/review-gate.yml` as high-risk in review. Fully closing it needs branch protection/rulesets
+  `gate-tripwire` now fails any PR that touches workflows/hooks/guards until the owner adds `gate-change: approved`,
+  and CODEOWNERS names those paths. It is a tripwire, not a lock: a PR can still edit branch-guard.yml itself, so
+  treat every such diff as high-risk. Fully closing it needs branch protection/rulesets
   (paid for private repos) or a `pull_request_target` design, which brings its own risks.
 - A change to the gate logic takes effect only for PRs opened after it merges (by design).
 - A true merge of another feature branch after the reviewed SHA does not make the review stale (accepted gap).

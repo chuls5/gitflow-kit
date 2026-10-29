@@ -21,9 +21,31 @@ run gh label create "review-gate: override" --repo "$REPO" --color FBCA04 --desc
 run gh label create direct-push --repo "$REPO" --color B60205 --description "Commit landed without a PR" --force
 run gh label create dependencies --repo "$REPO" --color 0366D6 --description "Dependency update" --force
 run gh label create github-actions --repo "$REPO" --color 000000 --description "GitHub Actions update" --force
-# 4. Local hooks for this clone.
+run gh label create "gate-change: approved" --repo "$REPO" --color 5319E7 --description "Owner only: reviewed a change to workflows/hooks/guards" --force
+run gh label create run-e2e --repo "$REPO" --color 1D76DB --description "Run e2e + Lighthouse on this PR" --force
+run gh label create stale --repo "$REPO" --color CCCCCC --description "No recent activity" --force
+run gh label create pinned --repo "$REPO" --color 0E8A16 --description "Exempt from stale" --force
+run gh label create security --repo "$REPO" --color D93F0B --description "Security issue or hardening" --force
+for l in bug enhancement task; do run gh label create "$l" --repo "$REPO" --force; done
+# 4. Security features. Secret scanning + push protection are free on public repos (paid on private);
+#    private vulnerability reporting and Dependabot alerts/security updates are free everywhere.
+visibility=$(gh api "repos/$REPO" --jq .visibility 2>/dev/null || echo unknown)
+if [ "$visibility" = "public" ]; then
+  run gh api -X PATCH "repos/$REPO" --input - <<<'{"security_and_analysis":{"secret_scanning":{"status":"enabled"},"secret_scanning_push_protection":{"status":"enabled"}}}'
+else
+  echo "Note: $REPO is $visibility; GitHub secret scanning/push protection need a paid plan there. gitleaks covers it."
+fi
+run gh api -X PUT "repos/$REPO/private-vulnerability-reporting"
+run gh api -X PUT "repos/$REPO/vulnerability-alerts"
+run gh api -X PUT "repos/$REPO/automated-security-fixes"
+# 5. Default workflow token: read-only, and Actions may not approve PRs.
+run gh api -X PUT "repos/$REPO/actions/permissions/workflow" -f default_workflow_permissions=read -F can_approve_pull_request_reviews=false
+# 6. Local hooks for this clone.
 run git config core.hooksPath .githooks
 run git config commit.template .gitmessage
-run chmod +x .githooks/commit-msg .githooks/pre-push
-# 5. Leftover placeholders.
-echo "Placeholders still to fill:"; grep -rnoE '__[A-Z_]+__' --exclude=setup.sh --exclude=README.md . || echo "  none"
+run chmod +x .githooks/commit-msg .githooks/pre-push .githooks/pre-commit scripts/verify.sh
+for tool in gitleaks actionlint shellcheck zizmor; do
+  command -v "$tool" >/dev/null 2>&1 || echo "Optional: install $tool for local checks (scripts/verify.sh skips it otherwise)."
+done
+# 7. Leftover placeholders.
+echo "Placeholders still to fill:"; grep -rnoE '__[A-Z_]+__' --exclude=setup.sh --exclude=README.md --exclude-dir=.git . || echo "  none"
