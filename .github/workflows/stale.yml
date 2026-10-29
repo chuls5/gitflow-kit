@@ -1,0 +1,27 @@
+name: stale
+# Weekly: nudge PRs/issues idle for 30 days, close after 14 more. Merged branches are already deleted
+# by delete_branch_on_merge (setup.sh). One short scheduled job a week, about 1 minute.
+on:
+  schedule:
+    - cron: "17 6 * * 1"
+  workflow_dispatch:
+permissions: {}
+jobs:
+  stale:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      issues: write
+      pull-requests: write
+    steps:
+      - uses: actions/stale@4391f3da665fdf50b6810c1a66712fb9ba21aa93 # v11.0.0
+        with:
+          days-before-stale: 30
+          days-before-close: 14
+          stale-pr-label: stale
+          stale-issue-label: stale
+          exempt-pr-labels: "pinned,security,review-gate: override"
+          exempt-issue-labels: "pinned,security,direct-push"
+          stale-pr-message: "No activity for 30 days. Push, comment, or add `pinned`, or this PR closes in 14 days."
+          stale-issue-message: "No activity for 30 days. Comment or add `pinned`, or this issue closes in 14 days."
+          delete-branch: false

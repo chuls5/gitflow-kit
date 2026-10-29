@@ -1,0 +1,31 @@
+name: lint
+# Stack-agnostic lint + format check. Fill __INSTALL_CMD__/__LINT_CMD__/__FORMAT_CHECK_CMD__ and the setup
+# step (examples/lint/ has ESLint+Prettier and ruff configs). Skipped for docs-only changes to save minutes.
+on:
+  pull_request:
+    paths-ignore: ["**/*.md", "docs/**", ".github/ISSUE_TEMPLATE/**", "LICENSE"]
+  push:
+    branches: [develop]
+    paths-ignore: ["**/*.md", "docs/**"]
+permissions:
+  contents: read
+concurrency:
+  group: lint-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  lint:
+    if: vars.KIT_TEMPLATE != 'true' # the kit itself has no stack to lint; delete this line in your project
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      # KIT: JS/TS → keep setup-node (add pnpm/action-setup if needed). Python → actions/setup-python + `pip install ruff`.
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with: { node-version-file: .nvmrc }
+      - name: Install
+        run: __INSTALL_CMD__
+      - name: Lint
+        run: __LINT_CMD__
+      - name: Format check
+        run: __FORMAT_CHECK_CMD__

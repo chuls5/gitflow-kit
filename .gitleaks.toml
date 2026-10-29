@@ -1,0 +1,30 @@
+# gitleaks config: the default ruleset (AWS, GCP, Stripe, OpenAI, Anthropic, GitHub, Slack, private keys, ...)
+# plus project tuning. Local: `gitleaks git -c .gitleaks.toml` (history); the pre-commit hook scans staged changes.
+title = "__PROJECT_NAME__ gitleaks config"
+
+[extend]
+useDefault = true
+
+# KIT: add project-specific token formats here.
+[[rules]]
+id = "vercel-token"
+description = "Vercel access token"
+regex = '''\bvercel_[A-Za-z0-9]{24,}\b'''
+keywords = ["vercel_"]
+
+[[rules]]
+id = "generic-env-assignment"
+description = "Secret-looking value assigned to a *_SECRET/_TOKEN/_KEY/_PASSWORD variable"
+regex = '''(?i)\b[A-Z0-9_]*(?:SECRET|TOKEN|API_KEY|PASSWORD|PRIVATE_KEY)\s*[:=]\s*["']?([A-Za-z0-9_\-+/=]{16,})["']?'''
+secretGroup = 1
+entropy = 3.5
+keywords = ["secret", "token", "api_key", "password", "private_key"]
+
+[allowlist]
+description = "Fixtures, examples and lockfiles"
+paths = [
+  '''(^|/)\.env\.(example|sample|template)$''',
+  '''(^|/)(pnpm-lock\.yaml|package-lock\.json|yarn\.lock)$''',
+  '''^tools/guards/guards\.test\.mjs$''',
+]
+regexes = ['''(?i)(example|placeholder|changeme|not-a-secret|dummy|fake|xxxxx)''']

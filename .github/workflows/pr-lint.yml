@@ -6,6 +6,9 @@ on:
     types: [opened, edited, reopened, synchronize]
 permissions:
   pull-requests: read
+concurrency:
+  group: pr-lint-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
 jobs:
   title:
     runs-on: ubuntu-latest
@@ -83,3 +86,20 @@ jobs:
           fi
           printf '%s' "$BODY" | grep -Eq '(__TICKET_REGEX__|no ticket)' || { echo "::error::PR body must reference a ticket (e.g. __TICKET_EXAMPLE__) or say 'no ticket'"; exit 1; }
           printf '%s' "$BODY" | grep -q '## Checklist' || { echo "::error::Keep the PR template's Checklist section"; exit 1; }
+  size:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      # Warns (never fails) when a PR is too big to review well. KIT: tune the threshold.
+      - name: PR size
+        env:
+          ADDED: ${{ github.event.pull_request.additions }}
+          DELETED: ${{ github.event.pull_request.deletions }}
+          FILES: ${{ github.event.pull_request.changed_files }}
+          MAX_LINES: "600"
+        run: |
+          total=$((ADDED + DELETED))
+          echo "PR changes $total lines in $FILES files (limit $MAX_LINES)."
+          if [ "$total" -gt "$MAX_LINES" ]; then
+            echo "::warning::This PR changes $total lines (> $MAX_LINES). Split it if you can: smaller PRs get better agent reviews."
+          fi

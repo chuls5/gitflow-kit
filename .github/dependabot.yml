@@ -12,6 +12,8 @@ updates:
       interval: weekly
       day: monday
     open-pull-requests-limit: 5
+    cooldown: # wait a week before adopting a new release (supply-chain buffer against hijacked publishes)
+      default-days: 7
     labels: [dependencies]
     commit-message:
       prefix: build(deps)
@@ -35,6 +37,8 @@ updates:
       interval: weekly
       day: monday
     labels: [dependencies, github-actions]
+    cooldown:
+      default-days: 7
     commit-message:
       prefix: ci(deps)
     groups:

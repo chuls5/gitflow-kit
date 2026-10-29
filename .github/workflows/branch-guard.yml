@@ -4,16 +4,16 @@ on:
   push:
     branches: [main, develop]
   pull_request:
-    branches: [main]
-    types: [opened, edited, reopened, synchronize]
-permissions:
-  contents: read
-  pull-requests: read
-  issues: write
+    types: [opened, edited, reopened, synchronize, labeled, unlabeled]
+permissions: {}
+concurrency:
+  group: branch-guard-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
 jobs:
   pr-source:
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' && github.base_ref == 'main'
     runs-on: ubuntu-latest
+    permissions: {}
     steps:
       - name: Only release/* and hotfix/* may target main
         env:
@@ -24,9 +24,45 @@ jobs:
             release/*|hotfix/*) echo "OK: $HEAD_REF -> main" ;;
             *) echo "::error::PRs into main must come from release/* or hotfix/* (got '$HEAD_REF'). Cut release/x.y.z from develop (or hotfix/x.y.z from main), or retarget this PR to develop."; exit 1 ;;
           esac
-  direct-push:
-    if: github.event_name == 'push'
+  # Tripwire for the known gap: GitHub reads workflow files from the PR itself, so a PR could weaken
+  # review-gate.yml or this file. Any change to the process/guard files fails until the OWNER adds the
+  # `gate-change: approved` label after reading the diff. (A PR could also edit this job; CODEOWNERS and
+  # the reviewer agent flag that. Rulesets on paid/public repos close the gap fully.)
+  gate-tripwire:
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+      issues: read
+    steps:
+      - name: Changes to gate/guard files need the owner's label
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          OWNER: ${{ github.repository_owner }}
+          PR: ${{ github.event.pull_request.number }}
+          LABEL: "gate-change: approved"
+        run: |
+          # KIT: keep in sync with the CODEOWNERS block for process files.
+          pattern='^(\.github/(workflows|scripts|guards|actions)/|\.github/CODEOWNERS$|\.github/dependabot\.yml$|\.githooks/|tools/(guards|review-gate)/|\.gitleaks\.toml$|\.gitattributes$|scripts/verify\.sh$)'
+          hits=$(gh api --paginate "repos/$REPO/pulls/$PR/files" --jq '.[].filename' | grep -E "$pattern" || true)
+          [ -n "$hits" ] || { echo "No gate/guard files changed."; exit 0; }
+          echo "Gate/guard files changed:"; printf '%s\n' "$hits" | sed 's/^/  /'
+          actor=$(gh api --paginate "repos/$REPO/issues/$PR/events" \
+            --jq '[.[] | select(.event == "labeled" and .label.name == env.LABEL)] | last | .actor.login // empty' | tail -n1)
+          labelled=$(gh api "repos/$REPO/issues/$PR/labels" --jq '.[].name' | grep -Fx "$LABEL" || true)
+          if [ -n "$labelled" ] && [ "$actor" = "$OWNER" ]; then
+            echo "::notice::Owner approved the gate change with \"$LABEL\"."; exit 0
+          fi
+          echo "::error::This PR changes process/guard files. The owner must review the diff and add the \"$LABEL\" label (re-add it after new pushes)."
+          exit 1
+  direct-push:
+    # KIT_TEMPLATE=true (repo variable) is set only on the kit's own repo, which is maintained by direct pushes.
+    if: github.event_name == 'push' && vars.KIT_TEMPLATE != 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
     steps:
       - name: Verify head commit came from a merged PR
         env:

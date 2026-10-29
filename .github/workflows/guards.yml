@@ -1,0 +1,71 @@
+name: guards
+# Secrets (gitleaks), source-only files, hardcoded URLs/IPs, PII/key material, and lint of the
+# workflows/scripts/docs themselves. Cheap jobs: run on every PR and on pushes to main/develop.
+on:
+  pull_request:
+  push:
+    branches: [main, develop]
+permissions: {}
+concurrency:
+  group: guards-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  secrets:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      # KIT: optional egress monitoring. `audit` logs every outbound call; switch to `block` with an allowlist once stable.
+      - uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
+        with: { egress-policy: audit }
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { fetch-depth: 0, persist-credentials: false }
+      # Free for personal accounts. Organization repos need a (free) GITLEAKS_LICENSE secret: gitleaks.io.
+      - uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITLEAKS_CONFIG: .gitleaks.toml
+          GITLEAKS_ENABLE_COMMENTS: "false"
+          GITLEAKS_ENABLE_UPLOAD_ARTIFACT: "false"
+  guards:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with: { node-version-file: .nvmrc }
+      - name: Guard tests
+        run: node --test tools/guards/*.test.mjs
+      - name: Source-only files, env files, size limits
+        run: node tools/guards/guards.mjs files
+      - name: No hardcoded URLs, hosts or IPs
+        run: node tools/guards/guards.mjs urls
+      - name: No PII or key material
+        run: node tools/guards/guards.mjs pii
+  kit-lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - name: actionlint (pinned release, checksum-verified by the pinned installer)
+        run: |
+          bash <(curl -fsSL https://raw.githubusercontent.com/rhysd/actionlint/914e7df21a07ef503a81201c76d2b11c789d3fca/scripts/download-actionlint.bash) 1.7.12
+          ./actionlint -color
+      - uses: zizmorcore/zizmor-action@53290badfa369cb0bf7ad16342cb62c2fa47ac7b # v0.8.0
+        with:
+          advanced-security: false # true uploads SARIF to code scanning (public repos / GHAS only)
+          min-severity: medium
+      - name: shellcheck
+        run: git ls-files -z '*.sh' '.githooks/*' | xargs -0 shellcheck
+      - name: yamllint
+        run: yamllint -s .
+      - uses: DavidAnson/markdownlint-cli2-action@696eb3f2509270d7b882d2aa68347bc676e7af34 # v25.0.0
+        with:
+          globs: "**/*.md"
