@@ -52,7 +52,7 @@ test('urls: flags internal hosts and IPs, except in tests', () => {
 });
 
 test('pii: key material is flagged everywhere', () => {
-  assert.equal(checkPii('src/a.ts', '-----BEGIN RSA PRIVATE KEY-----', cfg).length, 1);
+  assert.equal(checkPii('src/a.ts', '-----BEGIN RSA ' + 'PRIVATE KEY-----', cfg).length, 1);
   assert.equal(checkPii('src/a.test.ts', 'k = "AKIA' + 'ABCDEFGHIJKLMNOP"', cfg).length, 1);
   assert.equal(checkPii('src/a.ts', 'k = "sk-ant-' + 'a'.repeat(30) + '"', cfg).length, 1);
 });

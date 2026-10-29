@@ -2,7 +2,7 @@
 # One entrypoint for every local check CI runs. Usage: scripts/verify.sh  (or: make verify)
 # Missing optional tools are reported as SKIP; CI runs them for real.
 set -uo pipefail
-cd "$(git rev-parse --show-toplevel)"
+cd "$(git rev-parse --show-toplevel)" || exit 1
 fail=0; skipped=()
 step() { local name=$1; shift; printf '\n▶ %s\n' "$name"; if "$@"; then echo "✔ $name"; else echo "✖ $name"; fail=1; fi; }
 have() { command -v "$1" >/dev/null 2>&1; }
