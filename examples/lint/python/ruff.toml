@@ -1,0 +1,13 @@
+# EXAMPLE ruff config. Lint: `ruff check .`  Format check: `ruff format --check .`
+line-length = 120
+target-version = "py312"
+
+[lint]
+select = ["E", "F", "W", "I", "B", "UP", "S", "SIM", "RUF"] # S = bandit security rules (hardcoded passwords, etc.)
+ignore = []
+
+[lint.per-file-ignores]
+"tests/**" = ["S101"]
+
+[format]
+quote-style = "double"

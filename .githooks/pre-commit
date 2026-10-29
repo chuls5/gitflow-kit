@@ -1,0 +1,25 @@
+#!/bin/sh
+# Pre-commit guards on STAGED content: secrets (gitleaks), env files, source-only files, hardcoded
+# URLs/IPs, PII and key material (tools/guards), then the optional format+lint step.
+# Enabled by: git config core.hooksPath .githooks. Bypass (owner only, never for agents): git commit --no-verify
+set -eu
+root=$(git rev-parse --show-toplevel)
+cd "$root"
+if command -v gitleaks >/dev/null 2>&1; then
+  gitleaks git --pre-commit --staged --redact --no-banner -c .gitleaks.toml || {
+    echo "pre-commit: gitleaks found a secret in staged changes. Remove it and rotate it." >&2; exit 1; }
+else
+  echo "pre-commit: gitleaks not installed (brew install gitleaks); relying on tools/guards key patterns and CI." >&2
+fi
+if command -v node >/dev/null 2>&1; then
+  node tools/guards/guards.mjs all --staged || exit 1
+else
+  echo "pre-commit: node not found; skipping tools/guards (CI still runs them)." >&2
+fi
+# Optional format+lint on staged files (see examples/lint/lint-staged.example.sh).
+if [ -x .githooks/lint-staged ]; then
+  staged=$(git diff --cached --name-only --diff-filter=ACMR)
+  # shellcheck disable=SC2086 # newline-separated paths
+  [ -z "$staged" ] || .githooks/lint-staged $staged
+fi
+exit 0

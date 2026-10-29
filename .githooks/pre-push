@@ -1,6 +1,7 @@
 #!/bin/sh
 # Local guard: main and develop only change through pull requests (Git Flow, see CONTRIBUTING.md).
 # GitHub branch protection needs GitHub Pro on private repos, so this hook enforces it locally.
+# Also runs the full guard suite on the tree being pushed (same checks as CI's guards workflow).
 # Enable once per clone: git config core.hooksPath .githooks
 while read -r _local_ref _local_sha remote_ref _remote_sha; do
   case "$remote_ref" in
@@ -9,4 +10,7 @@ while read -r _local_ref _local_sha remote_ref _remote_sha; do
       exit 1 ;;
   esac
 done
+if command -v node >/dev/null 2>&1; then
+  node tools/guards/guards.mjs all >/dev/null || { node tools/guards/guards.mjs all; exit 1; }
+fi
 exit 0

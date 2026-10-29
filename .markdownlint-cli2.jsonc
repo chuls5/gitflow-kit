@@ -1,0 +1,11 @@
+{
+  // Lints the kit's own docs (and yours). Long tables and prose lines are fine.
+  "config": {
+    "default": true,
+    "MD013": false,
+    "MD033": { "allowed_elements": ["details", "summary", "br", "sub", "sup"] },
+    "MD041": false,
+    "MD024": { "siblings_only": true }
+  },
+  "ignores": ["node_modules/**", "CHANGELOG.md", ".github/pull_request_template.md", "CLAUDE.process.md"]
+}

@@ -1,0 +1,19 @@
+# Normalize line endings; scripts must stay LF.
+* text=auto eol=lf
+*.sh text eol=lf
+.githooks/* text eol=lf
+*.{cmd,bat,ps1} text eol=crlf
+# Lockfiles: don't diff noise, merge as-is.
+pnpm-lock.yaml -diff linguist-generated
+package-lock.json -diff linguist-generated
+yarn.lock -diff linguist-generated
+# Binary types we tolerate (small images, fonts). Anything else binary is rejected by tools/guards.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.avif binary
+*.ico binary
+*.woff binary
+*.woff2 binary
