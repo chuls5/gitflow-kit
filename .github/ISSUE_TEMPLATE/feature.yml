@@ -1,0 +1,16 @@
+name: Feature
+description: A new capability or improvement
+title: "feat: "
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes: { label: Problem / user need }
+    validations: { required: true }
+  - type: textarea
+    id: outcome
+    attributes: { label: Desired outcome and acceptance criteria, placeholder: "- [ ] ..." }
+    validations: { required: true }
+  - type: textarea
+    id: touches
+    attributes: { label: Touches (paths the change may modify) }

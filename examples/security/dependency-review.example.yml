@@ -1,0 +1,19 @@
+# EXAMPLE dependency review: blocks PRs that add dependencies with known vulnerabilities or banned licenses.
+# Free on PUBLIC repos; private repos need GitHub Code Security (paid). Use Dependabot alerts otherwise.
+name: dependency-review
+on:
+  pull_request:
+    paths: ["**/package.json", "**/*lock*", "**/requirements*.txt", "**/pyproject.toml", "**/go.mod", "**/Cargo.toml"]
+permissions:
+  contents: read
+jobs:
+  dependency-review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with:
+          fail-on-severity: high
+          deny-licenses: AGPL-3.0, GPL-3.0 # KIT: your license policy

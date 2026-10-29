@@ -1,0 +1,29 @@
+# EXAMPLE CodeQL code scanning. Free on PUBLIC repos; private repos need GitHub Code Security (paid).
+# Copy to .github/workflows/ only if one of those applies. KIT: set languages.
+name: codeql
+on:
+  pull_request:
+    branches: [develop, main]
+    paths-ignore: ["**/*.md", "docs/**"]
+  schedule:
+    - cron: "23 5 * * 1"
+permissions: {}
+concurrency:
+  group: codeql-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      security-events: write
+    strategy:
+      matrix:
+        language: [javascript-typescript, actions] # KIT: python, go, ...
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - uses: github/codeql-action/init@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        with: { languages: "${{ matrix.language }}", build-mode: none }
+      - uses: github/codeql-action/analyze@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1

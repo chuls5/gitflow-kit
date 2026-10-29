@@ -1,0 +1,19 @@
+# EXAMPLE (optional): Conventional-Commit-driven CHANGELOG + version bump. release-please keeps a
+# "chore(repo): release x.y.z" PR open from release/please → main; merging it tags and releases.
+# Fits Git flow only if you point it at the release branch you cut. Many solo projects simply use
+# `gh release create vX.Y.Z --generate-notes` instead (see docs/release-checklist.md).
+name: release-please
+on:
+  push:
+    branches: [main]
+permissions: {}
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
+        with:
+          release-type: node # KIT: python, simple, ...

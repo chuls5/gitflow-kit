@@ -1,0 +1,20 @@
+name: Task / ticket
+description: A scoped unit of work for a coding agent (one branch, one PR)
+title: "chore: "
+labels: [task]
+body:
+  - type: input
+    id: ticket
+    attributes: { label: Ticket id, placeholder: "__TICKET_EXAMPLE__" }
+  - type: textarea
+    id: scope
+    attributes: { label: What to do }
+    validations: { required: true }
+  - type: textarea
+    id: touches
+    attributes: { label: Touches (the only paths the PR may change) }
+    validations: { required: true }
+  - type: textarea
+    id: done
+    attributes: { label: Definition of done, placeholder: "- [ ] __CHECK_CMD__ passes\n- [ ] tests added" }
+    validations: { required: true }

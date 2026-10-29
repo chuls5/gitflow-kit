@@ -1,2 +1,13 @@
 # KIT: replace __OWNER__ with your GitHub login (or a team).
 * @__OWNER__
+
+# Process and guard files: the owner must read every change here (see branch-guard's gate-tripwire).
+/.github/ @__OWNER__
+/.githooks/ @__OWNER__
+/tools/guards/ @__OWNER__
+/tools/review-gate/ @__OWNER__
+/scripts/verify.sh @__OWNER__
+/.gitleaks.toml @__OWNER__
+/.gitattributes @__OWNER__
+/CLAUDE.process.md @__OWNER__
+/SECURITY.md @__OWNER__
