@@ -1,0 +1,43 @@
+{
+  "$comment": "KIT: tune per project. Globs: ** = any dirs, * = any chars except /. Per-line escape hatch: put `guard:allow` in a comment on that line (reviewers should question every one).",
+  "files": {
+    "maxFileBytes": 1048576,
+    "maxImageBytes": 307200,
+    "sizeExemptPaths": ["**/pnpm-lock.yaml", "**/package-lock.json", "**/yarn.lock", "**/Cargo.lock", "**/poetry.lock", "**/uv.lock"],
+    "blockedExtensions": [
+      "pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "odt", "ods", "odp", "rtf", "pages", "numbers", "key",
+      "zip", "tar", "gz", "tgz", "bz2", "xz", "7z", "rar", "zst",
+      "exe", "msi", "dmg", "pkg", "deb", "rpm", "apk", "aab", "ipa", "iso", "img", "bin", "app",
+      "jar", "war", "ear", "class", "so", "dll", "dylib", "o", "a", "lib", "obj", "pyc", "whl", "egg", "wasm", "node",
+      "mp4", "mov", "avi", "mkv", "webm", "mp3", "wav", "flac", "m4a",
+      "sqlite", "sqlite3", "db", "mdb", "parquet", "dump",
+      "pem", "p12", "pfx", "jks", "keystore", "ppk", "asc", "gpg", "kdbx",
+      "psd", "ai", "sketch", "fig", "xcf", "log", "har"
+    ],
+    "blockedPaths": [
+      "node_modules/**", "**/node_modules/**", "dist/**", "**/dist/**", "build/**", "**/build/**", "out/**",
+      ".next/**", "**/.next/**", ".turbo/**", "**/.turbo/**", ".vercel/**", "**/.vercel/**", "coverage/**", "**/coverage/**",
+      ".cache/**", "**/__pycache__/**", "**/.venv/**", "**/venv/**", "target/**", "**/.DS_Store", "**/Thumbs.db",
+      "**/id_rsa*", "**/id_ed25519*", "**/id_ecdsa*", "**/*.tfstate", "**/*.tfstate.*", "**/.npmrc", "**/.pypirc", "**/.netrc"
+    ],
+    "imageExtensions": ["png", "jpg", "jpeg", "gif", "webp", "avif", "bmp", "tif", "tiff", "ico", "heic"],
+    "allowedEnvFiles": [".env.example", ".env.sample", ".env.template"],
+    "allowPaths": []
+  },
+  "urls": {
+    "allowHosts": [
+      "github.com", "docs.github.com", "githubusercontent.com", "json.schemastore.org", "schemastore.org",
+      "www.w3.org", "w3.org", "json-schema.org", "conventionalcommits.org", "www.conventionalcommits.org", "semver.org",
+      "keepachangelog.com", "nvie.com", "docs.zizmor.sh", "securityscorecards.dev", "slsa.dev", "vercel.com",
+      "example.com", "example.org", "example.net", "img.shields.io", "nodejs.org", "developer.mozilla.org", "spdx.org"
+    ],
+    "allowPaths": ["**/*.md", "**/*.mdx", "docs/**", "LICENSE*", "CHANGELOG*", ".github/guards/**"],
+    "internalAllowPaths": ["**/*.test.*", "**/*.spec.*", "**/test/**", "**/tests/**", "**/__tests__/**", "e2e/**", "**/e2e/**", "**/playwright.config.*", "**/lighthouserc.*", "examples/**", ".github/guards/**"],
+    "internalHostSuffixes": [".local", ".internal", ".corp", ".lan", ".intranet", ".home.arpa", ".localdomain"]
+  },
+  "pii": {
+    "allowEmails": ["*@example.com", "*@example.org", "*@example.net", "*@users.noreply.github.com", "noreply@*", "no-reply@*", "*@anthropic.com"],
+    "allowPaths": ["**/*.test.*", "**/test/**", "**/tests/**", ".github/guards/**", "CODEOWNERS", ".github/CODEOWNERS", ".mailmap"],
+    "checkPhones": true
+  }
+}
