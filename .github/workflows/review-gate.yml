@@ -1,0 +1,122 @@
+name: review-gate
+# Encodes the /review-pr verdict as a check, because reviews here are COMMENT reviews (the owner
+# cannot approve their own PRs) and branch protection is unavailable on this plan.
+# Logic: .github/scripts/review-gate.mjs (tests: tools/review-gate). Heading format: the review-pr skill.
+# The gate runs the script and tests from the PR's BASE commit, never the PR head: a PR that edits
+# review-gate.mjs (say, to `exit 0`) is still judged by the reviewed logic already on the base branch.
+# The gate needs only API data, so the head is never checked out in the review-gate job. A change to
+# the gate logic itself takes effect for PRs opened after it merges; gate-logic-tests runs the PR's
+# own copy of the tests as a separate, non-gating check.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, labeled, unlabeled]
+  pull_request_review:
+    types: [submitted, edited, dismissed]
+permissions: {}
+concurrency:
+  group: review-gate-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+jobs:
+  review-gate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read # checkout (private repo)
+      pull-requests: read # reviews, commits, labels
+      issues: read # label events, to check who applied the override label
+      actions: read # list this workflow's earlier runs on the head SHA
+    outputs:
+      rerun: ${{ steps.evaluate.outputs.rerun }}
+    steps:
+      # BASE commit only (both pull_request and pull_request_review payloads carry base.sha).
+      # Do not add a head checkout to this job: it would let the PR rewrite its own gate.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          persist-credentials: false
+          sparse-checkout: |
+            .github
+            docs
+            tools/review-gate
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with: { node-version-file: .nvmrc }
+      - name: Test the gate logic (base commit)
+        run: node --test "tools/review-gate/*.test.mjs"
+      - name: Fetch reviews, commits, runs, the override label and back-merge status
+        id: fetch
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          OWNER: ${{ github.repository_owner }}
+          PR: ${{ github.event.pull_request.number }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          SHA: ${{ github.event.pull_request.head.sha }}
+          LABEL: "review-gate: override"
+        run: |
+          # Fetched live rather than read from the event payload, so a re-run re-evaluates.
+          gh api --paginate --slurp "repos/$REPO/pulls/$PR/reviews" > "$RUNNER_TEMP/reviews.json"
+          gh api --paginate --slurp "repos/$REPO/pulls/$PR/commits" > "$RUNNER_TEMP/commits.json"
+          gh api --paginate --slurp "repos/$REPO/actions/workflows/review-gate.yml/runs?head_sha=$SHA&per_page=100" > "$RUNNER_TEMP/runs.json"
+          override=0
+          if gh api "repos/$REPO/issues/$PR/labels" --jq '.[].name' | grep -Fxq "$LABEL"; then
+            actor=$(gh api --paginate "repos/$REPO/issues/$PR/events" \
+              --jq '[.[] | select(.event == "labeled" and .label.name == env.LABEL)] | last | .actor.login // empty' | tail -n1)
+            if [ "$actor" = "$OWNER" ]; then
+              override=1
+            else
+              echo "::warning::\"$LABEL\" was applied by $actor, not the owner ($OWNER); ignoring it."
+            fi
+          fi
+          echo "override=$override" >> "$GITHUB_OUTPUT"
+          back_merge=0
+          case "$HEAD_REF" in
+            chore/back-merge-*)
+              ahead=$(gh api "repos/$REPO/compare/main...$SHA" --jq '.ahead_by')
+              [ "$ahead" = "0" ] && back_merge=1
+              echo "Back-merge branch: $ahead commit(s) not on main" ;;
+          esac
+          echo "back_merge=$back_merge" >> "$GITHUB_OUTPUT"
+      - name: Evaluate the review verdict
+        id: evaluate
+        env:
+          OWNER: ${{ github.repository_owner }}
+          OVERRIDE: ${{ steps.fetch.outputs.override }}
+          BACK_MERGE: ${{ steps.fetch.outputs.back_merge }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          RUN_ID: ${{ github.run_id }}
+        run: node .github/scripts/review-gate.mjs "$RUNNER_TEMP/reviews.json" "$RUNNER_TEMP/commits.json" "$RUNNER_TEMP/runs.json"
+  # The PR's own copy of the gate tests, so a change to the logic is tested before it merges. It
+  # does not feed the review-gate verdict, so a PR cannot pass the gate by editing these files.
+  gate-logic-tests:
+    if: ${{ github.event_name == 'pull_request' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with: { node-version-file: .nvmrc }
+      - name: Test the PR's gate logic
+        run: node --test "tools/review-gate/*.test.mjs"
+  # pull_request and pull_request_review runs are separate check rows on the same SHA. Re-run the
+  # earlier rows that show a different verdict (or were cancelled by the concurrency group); they
+  # re-fetch live data, so every review-gate row ends up showing the latest verdict. This job holds
+  # the only write token and runs no repository code.
+  review-gate-sync:
+    needs: review-gate
+    if: ${{ always() && needs.review-gate.outputs.rerun != '' }}
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      - name: Re-run earlier review-gate runs whose verdict is out of date
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RERUN: ${{ needs.review-gate.outputs.rerun }}
+        run: |
+          for id in $RERUN; do
+            case "$id" in *[!0-9]*) echo "::warning::Skipping non-numeric run id"; continue ;; esac
+            echo "Re-running review-gate run $id"
+            gh api -X POST "repos/$REPO/actions/runs/$id/rerun" || echo "::warning::Could not re-run $id"
+          done

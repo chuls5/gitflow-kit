@@ -1,0 +1,48 @@
+name: branch-guard
+# Free-plan private repos can't use branch protection, so this flags Git flow violations.
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+    types: [opened, edited, reopened, synchronize]
+permissions:
+  contents: read
+  pull-requests: read
+  issues: write
+jobs:
+  pr-source:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Only release/* and hotfix/* may target main
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+        run: |
+          # Keep in sync with pr-lint.yml's `base` job and CONTRIBUTING.md: develop reaches main only via a release/* branch.
+          case "$HEAD_REF" in
+            release/*|hotfix/*) echo "OK: $HEAD_REF -> main" ;;
+            *) echo "::error::PRs into main must come from release/* or hotfix/* (got '$HEAD_REF'). Cut release/x.y.z from develop (or hotfix/x.y.z from main), or retarget this PR to develop."; exit 1 ;;
+          esac
+  direct-push:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify head commit came from a merged PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+          BRANCH: ${{ github.ref_name }}
+          ACTOR: ${{ github.actor }}
+        run: |
+          merged=$(gh api "repos/$REPO/commits/$SHA/pulls" --jq '[.[] | select(.merged_at != null)] | length')
+          if [ "${merged:-0}" -gt 0 ]; then
+            echo "OK: $SHA on $BRANCH is from a merged PR"; exit 0
+          fi
+          msg="Direct push to \`$BRANCH\` detected: commit $SHA by @$ACTOR is not associated with a merged pull request. See docs/git-flow.md."
+          echo "::error::$msg"
+          gh label create direct-push --repo "$REPO" --color B60205 --description "Commit landed without a PR" 2>/dev/null || true
+          gh issue create --repo "$REPO" --title "Direct push to $BRANCH (${SHA:0:7})" --label direct-push \
+            --body "$msg"$'\n\n'"Run: ${{ github.server_url }}/$REPO/actions/runs/${{ github.run_id }}" || true
+          exit 1

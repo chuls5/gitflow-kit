@@ -1,0 +1,56 @@
+# EXAMPLE (Playwright e2e + Lighthouse CI budgets on a Next.js app). Copy to .github/workflows/ and adapt.
+name: e2e
+on:
+  pull_request:
+  push:
+    branches: [develop, main, "release/**", "hotfix/**"]
+# Least privilege: jobs only read the repo (artifacts and the pnpm cache use the runtime token).
+permissions:
+  contents: read
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with: { node-version-file: .nvmrc, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter __WEB_PACKAGE__ test:e2e:install
+      # playwright.config.ts builds the app (production) and serves it on :3300
+      - run: pnpm --filter __WEB_PACKAGE__ test:e2e
+      - if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: playwright-report
+          path: |
+            apps/web/playwright-report
+            apps/web/test-results
+          retention-days: 14
+
+  lighthouse:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with: { node-version-file: .nvmrc, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter __WEB_PACKAGE__ build
+      # lighthouserc.json starts the production server on :3301 and asserts the budgets
+      - run: pnpm --filter __WEB_PACKAGE__ lhci
+        env:
+          # TEST-ONLY secret so `next start` (production mode) serves /api; production sets its own.
+          APP_SECRET: e2e-only-not-a-secret  # KIT: any test-only env your prod build needs
+      - if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: lighthouse-report
+          path: apps/web/.lighthouseci
+          include-hidden-files: true
+          retention-days: 14

@@ -1,0 +1,12 @@
+#!/bin/sh
+# Local guard: main and develop only change through pull requests (Git Flow, see CONTRIBUTING.md).
+# GitHub branch protection needs GitHub Pro on private repos, so this hook enforces it locally.
+# Enable once per clone: git config core.hooksPath .githooks
+while read -r _local_ref _local_sha remote_ref _remote_sha; do
+  case "$remote_ref" in
+    refs/heads/main|refs/heads/develop)
+      echo "pre-push: refusing to push to ${remote_ref#refs/heads/} directly. Open a pull request (see CONTRIBUTING.md)." >&2
+      exit 1 ;;
+  esac
+done
+exit 0

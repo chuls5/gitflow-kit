@@ -1,0 +1,42 @@
+# Dependabot. PRs target develop like any feature branch and need /review-pr before the owner
+# merges: review-gate has no Dependabot exception. pr-lint skips only its ticket/checklist body rules.
+# Commit prefixes keep titles Conventional with allowed scopes (pr-lint): build(deps) / ci(deps).
+# A package goes to the first group that matches, so named groups come before minor-patch.
+# KIT: change package-ecosystem (npm, pip, gomod, cargo, ...) and the groups to fit your stack.
+version: 2
+updates:
+  - package-ecosystem: npm # KIT: your ecosystem
+    directory: /
+    target-branch: develop
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    labels: [dependencies]
+    commit-message:
+      prefix: build(deps)
+    groups:
+      # KIT: example group for a framework whose packages must move together.
+      framework:
+        patterns:
+          - next
+          - react
+          - react-dom
+          - "@types/react"
+          - "@types/react-dom"
+      minor-patch:
+        patterns: ["*"]
+        update-types: [minor, patch]
+
+  - package-ecosystem: github-actions # workflows pin full SHAs; Dependabot bumps the SHA and the # vX.Y.Z comment
+    directory: /
+    target-branch: develop
+    schedule:
+      interval: weekly
+      day: monday
+    labels: [dependencies, github-actions]
+    commit-message:
+      prefix: ci(deps)
+    groups:
+      actions:
+        patterns: ["*"]

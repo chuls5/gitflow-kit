@@ -1,0 +1,32 @@
+#!/bin/sh
+# Enforce Conventional Commits on every local commit (see CONTRIBUTING.md#commits).
+# KIT: the scope list (SCOPES) must match pr-lint.yml and .gitmessage. Edit all three together.
+# Enabled by: git config core.hooksPath .githooks
+msg_file="$1"
+subject=$(sed -n '/^[^#]/{p;q;}' "$msg_file")
+
+# Let git's own merge/revert/fixup subjects through.
+case "$subject" in
+  Merge\ *|Revert\ *|fixup!\ *|squash!\ *) exit 0 ;;
+esac
+
+pattern='^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\((app|api|db|auth|deps|ci|docs|tools|repo)\))?!?: [a-z0-9].{2,}$'
+if ! printf '%s' "$subject" | grep -Eq "$pattern"; then
+  cat >&2 <<MSG
+commit-msg: subject must follow Conventional Commits, e.g.
+  feat(api): add rate limiting to the login route
+  fix(app): announce form errors to screen readers
+type:  feat fix docs style refactor perf test build ci chore revert
+scope: app api db auth deps ci docs tools repo
+Start the description in lower case, with no trailing period. Got:
+  $subject
+MSG
+  exit 1
+fi
+len=$(printf '%s' "$subject" | wc -m | tr -d ' ')
+if [ "$len" -gt 72 ]; then
+  echo "commit-msg: subject is $len chars; keep it ≤ 72." >&2
+  exit 1
+fi
+case "$subject" in *.) echo "commit-msg: no trailing period in the subject." >&2; exit 1 ;; esac
+exit 0

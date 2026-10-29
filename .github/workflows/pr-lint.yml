@@ -1,0 +1,85 @@
+name: pr-lint
+# The PR title becomes the squash-merge commit on develop, so it must be a Conventional Commit,
+# the body must name its sprint ticket, and the base branch must follow Git Flow.
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize]
+permissions:
+  pull-requests: read
+jobs:
+  title:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: amannn/action-semantic-pull-request@48f256284bd46cdaab1048c3721360e808335d50 # v6.1.1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          types: |
+            feat
+            fix
+            docs
+            style
+            refactor
+            perf
+            test
+            build
+            ci
+            chore
+            revert
+          # KIT: project scopes. Keep in sync with .githooks/commit-msg and .gitmessage.
+          scopes: |
+            app
+            api
+            db
+            auth
+            deps
+            ci
+            docs
+            tools
+            repo
+          subjectPattern: ^[a-z0-9].*[^.]$
+          subjectPatternError: Start the PR title description in lower case and don't end it with a period.
+  base:
+    runs-on: ubuntu-latest
+    steps:
+      # Keep in sync with branch-guard.yml's pr-source job, which states the main-target rule too.
+      - name: Git Flow base branch rules
+        env:
+          BASE: ${{ github.event.pull_request.base.ref }}
+          HEAD: ${{ github.event.pull_request.head.ref }}
+        run: |
+          if [ "$HEAD" = "main" ] || [ "$HEAD" = "develop" ]; then
+            echo "::error::Never use $HEAD itself as a PR head (branches are deleted on merge). Back-merge via chore/back-merge-x.y.z cut from origin/main."; exit 1
+          fi
+          case "$BASE" in
+            main)
+              case "$HEAD" in
+                release/*|hotfix/*) ;;
+                *) echo "::error::Only release/* and hotfix/* branches may target main (got $HEAD). Target develop."; exit 1 ;;
+              esac ;;
+            develop)
+              case "$HEAD" in
+                release/*) echo "::error::release/* branches target main, then back-merge."; exit 1 ;;
+                hotfix/*) echo "::error::hotfix/* branches target main (or an open release/* branch), then back-merge."; exit 1 ;;
+              esac ;;
+          esac
+  body:
+    runs-on: ubuntu-latest
+    steps:
+      # KIT: __TICKET_REGEX__ is an ERE for your ticket ids, e.g. S[0-9]+-[0-9]{2} (sprint tickets like S1-03),
+      # [A-Z]+-[0-9]+ (Jira/Linear), or #[0-9]+ (GitHub issues).
+      - name: PR title ≤ 72 chars, body names a ticket and has the checklist
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+          BODY: ${{ github.event.pull_request.body }}
+          AUTHOR: ${{ github.event.pull_request.user.login }}
+        run: |
+          len=$(printf '%s' "$TITLE" | wc -m | tr -d ' ')
+          [ "$len" -le 72 ] || { echo "::error::PR title is $len chars; keep it ≤ 72 (it becomes the squash commit subject)"; exit 1; }
+          # Dependabot writes its own body (no ticket, no checklist). Only those two body rules are
+          # skipped for it; the title, base and review-gate checks still apply (audit #26 DX-01).
+          if [ "$AUTHOR" = "dependabot[bot]" ]; then
+            echo "Dependabot PR: skipping the ticket and checklist body rules."; exit 0
+          fi
+          printf '%s' "$BODY" | grep -Eq '(__TICKET_REGEX__|no ticket)' || { echo "::error::PR body must reference a ticket (e.g. __TICKET_EXAMPLE__) or say 'no ticket'"; exit 1; }
+          printf '%s' "$BODY" | grep -q '## Checklist' || { echo "::error::Keep the PR template's Checklist section"; exit 1; }
